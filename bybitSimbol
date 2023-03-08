@@ -1,0 +1,27 @@
+#현물 심볼 조회
+from pybit import HTTP
+import pprint
+
+session = HTTP(
+    endpoint="https://api.bybit.com", 
+    spot=True
+)
+
+symbols = session.query_symbol()
+result = symbols['result']
+for symbol in result:
+    pprint.pprint(symbol)
+
+
+# 선물 심볼 조회
+from pybit import HTTP
+import pprint
+
+session = HTTP(
+    endpoint="https://api.bybit.com", 
+)
+
+symbols = session.query_symbol()
+result = symbols['result']
+for symbol in result:
+    pprint.pprint(symbol)    

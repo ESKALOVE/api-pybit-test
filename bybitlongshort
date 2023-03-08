@@ -1,0 +1,91 @@
+import time
+import bybit
+import datetime
+from pybit.usdt_perpetual import HTTP
+
+with open("bybit2.txt") as f:
+    lines = f.readlines()
+    api_key = lines[0].strip()
+    api_secret = lines[1].strip()
+session = HTTP(
+    endpoint="https://api.bybit.com", 
+    api_key=api_key, 
+    api_secret=api_secret
+)    
+client = bybit.bybit(test=False, api_key=api_key, api_secret=api_secret)
+
+
+
+#def get_target_price(ticker, k):
+#   """변동성 돌파 전략으로 매수 목표가 조회"""
+#    df = client.Market.Market_symbolInfo(symbol=ticker).result()
+#    df = df[0]['result'][0]
+#    price_increment = df['price_filter']['tick_size']
+#    price = client.Market.Market_symbolInfo(symbol=ticker).result()[0]['result'][0]['last_price']
+#    target_price = round(price + (price * k), 1)
+#    target_price = target_price - (target_price % float(price_increment))
+#    return target_price
+def get_target_price(ticker, k):
+    """변동성 돌파 전략으로 매수 목표가 조회"""
+    result = client.Market.Market_symbolInfo(symbol=ticker).result()
+    if 'price_filter' in result[0]['result'][0]:
+        price_increment = result[0]['result'][0]['price_filter']['tick_size']
+        price = result[0]['result'][0]['last_price']
+        target_price = round(price + (price * k), 1)
+        target_price = target_price - (target_price % float(price_increment))
+        return target_price
+    else:
+        print("price_filter를 찾을 수 없습니다.")
+        return None
+
+
+
+
+
+
+def get_start_time(ticker):
+    """시작 시간 조회"""
+    interval = 'D'
+    df = client.Kline.Kline_get(symbol=ticker, interval=interval, limit=1).result()
+    start_time = df[0]['result'][0]['open_time']
+    start_time = datetime.datetime.fromtimestamp(start_time)
+    return start_time
+
+def get_balance(ticker):
+    """잔고 조회"""
+    balance = client.Wallet.Wallet_getBalance(coin=ticker).result()
+    if balance[0]['result'] is None:
+        return 0
+    else:
+        return balance[0]['result'][0]['wallet_balance']
+
+def get_current_price(ticker):
+    """현재가 조회"""
+    price = client.Market.Market_symbolInfo(symbol=ticker).result()[0]['result'][0]['last_price']
+    return price
+
+ticker = 'BTCUSDT'
+leverage = 10
+
+target_price = get_target_price(ticker, 0.3)
+current_price = get_current_price(ticker)
+
+up_or_down = None  # 상승: buy, 하락: sell
+
+if target_price is not None and current_price is not None:
+    if target_price < current_price:
+        up_or_down = 'buy'
+    elif target_price > current_price:
+        up_or_down = 'sell'
+
+    if up_or_down == 'buy':
+        usdt = get_balance("USDT")
+        order_qty = round(usdt * leverage / current_price, 4)
+        if usdt > 10:
+            client.Order.Order_new(side=up_or_down, symbol=ticker, order_type='Market', qty=order_qty, time_in_force='GoodTillCancel', reduce_only=False, close_on_trigger=False, leverage=leverage).result()
+    elif up_or_down == 'sell':
+        btc = get_balance("BTC")
+        if btc > 0.00008:
+            client.Order.Order_new(side=up_or_down, symbol=ticker, order_type='Market', qty=btc*leverage, time_in_force='GoodTillCancel', reduce_only=False, close_on_trigger=False, leverage=leverage).result()
+else:
+    print("target_price 또는 current_price를 가져오는 동안 문제가 발생했습니다.")
